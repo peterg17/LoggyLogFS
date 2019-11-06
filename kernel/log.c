@@ -15,24 +15,37 @@ Each transaction is an object with the following info:
   sequence # (what exactly do we do with this?)
   array of block locations to be logged
   set of outstanding handles? (ok i have no idea how we use these...)
+    - i think they denote the start/stop of syscalls so we can at least be atomic
+      wrt syscalls
   actual log blocks
 */
 
-
-struct logheader {
-  int n;
-  int block[LOGSIZE];
-};
-
-struct log {
+struct transaction {
   struct spinlock lock;
-  int start;
-  int size;
-  int outstanding; // how many FS sys calls are executing.
-  int committing;  // in commit(), please wait.
-  int dev;
-  struct logheader lh;
+  int seq; //sequence # of transaction (transaction id)
+  enum {
+    T_OPEN,
+    T_COMMITTING,
+    T_INSTALLING,
+    T_FREEING
+  } txnState;
+  int handleCounter;
+  int block[TRANSACTIONSIZE];
+  int checksum;
 };
+
+
+// struct log {
+//   struct spinlock lock;
+//   int start;
+//   int size;
+//   int outstanding; // how many FS sys calls are executing.
+//   int committing;  // in commit(), please wait.
+//   int dev;
+//   struct logheader lh;
+// };
+
+
 struct log log[NDISK];
 
 static void recover_from_log(int);
