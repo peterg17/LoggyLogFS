@@ -45,6 +45,15 @@ struct transaction {
 //   struct logheader lh;
 // };
 
+struct log {
+  struct spinlock lock;
+  int start;
+  int size;
+  int committing;
+  int dev;
+};
+
+
 
 struct log log[NDISK];
 
