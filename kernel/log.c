@@ -30,7 +30,8 @@ struct transaction {
     T_FREEING
   } txnState;
   int handleCounter;
-  int block[TRANSACTIONSIZE];
+  int block[TRANSIZE];
+  int bindex;
   int checksum;
 };
 
@@ -51,9 +52,9 @@ struct log {
   int size;
   int committing;
   int dev;
+  struct transaction transactions[MAXTRANS];
+  struct transaction* cur_trans;
 };
-
-
 
 struct log log[NDISK];
 
@@ -225,20 +226,28 @@ log_write(struct buf *b)
   int i;
 
   int dev = b->dev;
-  if (log[dev].lh.n >= LOGSIZE || log[dev].lh.n >= log[dev].size - 1)
-    panic("too big a transaction");
-  if (log[dev].outstanding < 1)
-    panic("log_write outside of trans");
+//  if (log[dev].lh.n >= LOGSIZE || log[dev].lh.n >= log[dev].size - 1)
+//    panic("too big a transaction");
+//  if (log[dev].outstanding < 1)
+//    panic("log_write outside of trans");
 
   acquire(&log[dev].lock);
-  for (i = 0; i < log[dev].lh.n; i++) {
-    if (log[dev].lh.block[i] == b->blockno)   // log absorbtion
+//  for (i = 0; i < log[dev].lh.n; i++) {
+//    if (log[dev].lh.block[i] == b->blockno)   // log absorbtion
+//      break;
+//  }
+
+  for (i = 0; i < log[dev].bindex; i++) {
+    if (b->blockno == log[dev].block[i].blockno) {
       break;
+    }
   }
-  log[dev].lh.block[i] = b->blockno;
-  if (i == log[dev].lh.n) {  // Add new block to log?
+
+//  log[dev].lh.block[i] = b->blockno;
+  if (i == log[dev].bindex) {  // Add new block to log?
+    log[dev].block[bindex] = b->blockno;
+    log[dev].bindex++;
     bpin(b);
-    log[dev].lh.n++;
   }
   release(&log[dev].lock);
 }

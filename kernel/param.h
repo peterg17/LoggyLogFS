@@ -7,9 +7,10 @@
 #define ROOTDEV       0  // device number of file system root disk
 #define MAXARG       32  // max exec arguments
 #define MAXOPBLOCKS  10  // max # of blocks any FS op writes
-#define TRANSACTIONSIZE (MAXOPBLOCKS*5) // max data blocks in one transaction
-#define LOGSIZE      (TRANSACTIONSIZE*3)  // max data blocks in on-disk log
+#define TRANSIZE     (MAXOPBLOCKS*5) // max data blocks in one transaction
+#define LOGSIZE      (TRANSIZE*3)  // max data blocks in on-disk log
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       2000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
 #define NDISK        2
+#define MAXTRANS     3
