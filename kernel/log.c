@@ -29,6 +29,7 @@ struct transaction {
     T_INSTALLING,
     T_FREEING
   } txnState;
+  int syscallct;
   int handleCounter;
   int block[TRANSIZE];
   int bindex;
@@ -137,13 +138,14 @@ begin_op(int dev)
 {
   acquire(&log[dev].lock);
   while(1){
-    if(log[dev].committing){
-      sleep(&log, &log[dev].lock);
-    } else if(log[dev].lh.n + (log[dev].outstanding+1)*MAXOPBLOCKS > LOGSIZE){
+    struct transaction *currtrans = log[dev].cur_trans;
+    if((currtrans->syscallct+1)*MAXOPBLOCKS > TRANSIZE){
       // this op might exhaust log space; wait for commit.
+      sleep(&currtrans, &currtrans->lock);
       sleep(&log, &log[dev].lock);
     } else {
-      log[dev].outstanding += 1;
+      currtrans->handleCounter += 1;
+      release(&currtrans->lock);
       release(&log[dev].lock);
       break;
     }
