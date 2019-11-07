@@ -49,6 +49,7 @@ struct transaction {
 
 struct log {
   struct spinlock lock;
+  struct spinlock curtranslock;
   int start;
   int size;
   int committing;
@@ -141,6 +142,7 @@ begin_op(int dev)
     struct transaction *currtrans = log[dev].cur_trans;
     if((currtrans->syscallct+1)*MAXOPBLOCKS > TRANSIZE){
       // this op might exhaust log space; wait for commit.
+      acquire(&currtrans->lock);
       sleep(&currtrans, &currtrans->lock);
       sleep(&log, &log[dev].lock);
     } else {
@@ -160,18 +162,36 @@ end_op(int dev)
   int do_commit = 0;
 
   acquire(&log[dev].lock);
-  log[dev].outstanding -= 1;
-  if(log[dev].committing)
-    panic("log[dev].committing");
-  if(log[dev].outstanding == 0){
-    do_commit = 1;
-    log[dev].committing = 1;
+  acquire(&log[dev].cur_trans->lock);
+
+//  log[dev].outstanding -= 1;
+  log[dev].cur_trans->handleCounter -= 1;
+
+  if( log[dev].cur_trans->handleCounter <= 0) {
+    if (currtrans->syscallct == MAXSYSCALL) {
+        do_commit = 1;
+        //create new transaction
+        // point cur_trans to new transaction
+        wakeup(&log[dev].cur_trans->lock);
+
+    }
   } else {
+    wakeup(&log[dev].cur_trans->lock);
+    wakeup(&log);
+  }
+
+//  if(log[dev].committing)
+//    panic("log[dev].committing");
+//  if(log[dev].outstanding == 0){
+//    do_commit = 1;
+//    log[dev].committing = 1;
+//  } else {
     // begin_op() may be waiting for log space,
     // and decrementing log[dev].outstanding has decreased
     // the amount of reserved space.
-    wakeup(&log);
-  }
+//    wakeup(&log);
+//  }
+
   release(&log[dev].lock);
 
   if(do_commit){
