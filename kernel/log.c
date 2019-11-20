@@ -6,56 +6,20 @@
 #include "sleeplock.h"
 #include "fs.h"
 #include "buf.h"
+#include "log.h"
 
 
 /*
-In-memory log for EXT3:
+An xv6 implementation of an EXT3-like logging system 
+that allows for several types of concurrency:
 
-Each transaction is an object with the following info:
-  sequence # (what exactly do we do with this?)
-  array of block locations to be logged
-  set of outstanding handles? (ok i have no idea how we use these...)
-    - i think they denote the start/stop of syscalls so we can at least be atomic
-      wrt syscalls
-  actual log blocks
+  1. FS syscall concurrency: like the standard xv6 logging scheme,
+     we allow several syscalls to modify blocks at the same 
+
+  2. Transaction concurrency: can write to the current transaction
+      in memory while other transactions are committing
+
 */
-
-struct transaction {
-  struct spinlock lock;
-  int seq; //sequence # of transaction (transaction id)
-  enum {
-    T_OPEN,
-    T_COMMITTING,
-    T_INSTALLING,
-    T_FREEING
-  } txnState;
-  int syscallct;
-  int handleCounter;
-  int block[TRANSIZE];
-  int bindex;
-  int checksum;
-};
-
-
-// struct log {
-//   struct spinlock lock;
-//   int start;
-//   int size;
-//   int outstanding; // how many FS sys calls are executing.
-//   int committing;  // in commit(), please wait.
-//   int dev;
-//   struct logheader lh;
-// };
-
-struct log {
-  struct spinlock lock;
-  int start;
-  int size;
-  int committing;
-  int dev;
-  struct transaction transactions[MAXTRANS];
-  struct transaction* cur_trans;
-};
 
 struct log log[NDISK];
 
@@ -65,45 +29,21 @@ static void commit(int);
 void
 initlog(int dev, struct superblock *sb)
 {
-  if (sizeof(struct logheader) >= BSIZE)
-    panic("initlog: too big logheader");
-
-  initlock(&log[dev].lock, "log");
-  log[dev].start = sb->logstart;
-  log[dev].size = sb->nlog;
-  log[dev].dev = dev;
-  recover_from_log(dev);
+  panic("init log not implemented\n");
 }
 
 // Copy committed blocks from log to their home location
 static void
 install_trans(int dev)
 {
-  int tail;
-
-  for (tail = 0; tail < log[dev].lh.n; tail++) {
-    struct buf *lbuf = bread(dev, log[dev].start+tail+1); // read log block
-    struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // read dst
-    memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
-    bwrite(dbuf);  // write dst to disk
-    bunpin(dbuf);
-    brelse(lbuf);
-    brelse(dbuf);
-  }
+  panic("install trans not implemented\n");
 }
 
 // Read the log header from disk into the in-memory log header
 static void
 read_head(int dev)
 {
-  struct buf *buf = bread(dev, log[dev].start);
-  struct logheader *lh = (struct logheader *) (buf->data);
-  int i;
-  log[dev].lh.n = lh->n;
-  for (i = 0; i < log[dev].lh.n; i++) {
-    log[dev].lh.block[i] = lh->block[i];
-  }
-  brelse(buf);
+  panic("read head not implemented\n");
 }
 
 // Write in-memory log header to disk.
@@ -112,44 +52,20 @@ read_head(int dev)
 static void
 write_head(int dev)
 {
-  struct buf *buf = bread(dev, log[dev].start);
-  struct logheader *hb = (struct logheader *) (buf->data);
-  int i;
-  hb->n = log[dev].lh.n;
-  for (i = 0; i < log[dev].lh.n; i++) {
-    hb->block[i] = log[dev].lh.block[i];
-  }
-  bwrite(buf);
-  brelse(buf);
+  panic("write head not implemented\n");
 }
 
 static void
 recover_from_log(int dev)
 {
-  read_head(dev);
-  install_trans(dev); // if committed, copy from log to disk
-  log[dev].lh.n = 0;
-  write_head(dev); // clear the log
+  panic("recover from log not implemented\n");
 }
 
 // called at the start of each FS system call.
 void
 begin_op(int dev)
 {
-  acquire(&log[dev].lock);
-  while(1){
-    struct transaction *currtrans = log[dev].cur_trans;
-    if((currtrans->syscallct+1)*MAXOPBLOCKS > TRANSIZE){
-      // this op might exhaust log space; wait for commit.
-      sleep(&currtrans, &currtrans->lock);
-      sleep(&log, &log[dev].lock);
-    } else {
-      currtrans->handleCounter += 1;
-      release(&currtrans->lock);
-      release(&log[dev].lock);
-      break;
-    }
-  }
+  panic("begin op not implemented\n");
 }
 
 // called at the end of each FS system call.
@@ -157,60 +73,20 @@ begin_op(int dev)
 void
 end_op(int dev)
 {
-  int do_commit = 0;
-
-  acquire(&log[dev].lock);
-  log[dev].outstanding -= 1;
-  if(log[dev].committing)
-    panic("log[dev].committing");
-  if(log[dev].outstanding == 0){
-    do_commit = 1;
-    log[dev].committing = 1;
-  } else {
-    // begin_op() may be waiting for log space,
-    // and decrementing log[dev].outstanding has decreased
-    // the amount of reserved space.
-    wakeup(&log);
-  }
-  release(&log[dev].lock);
-
-  if(do_commit){
-    // call commit w/o holding locks, since not allowed
-    // to sleep with locks.
-    commit(dev);
-    acquire(&log[dev].lock);
-    log[dev].committing = 0;
-    wakeup(&log);
-    release(&log[dev].lock);
-  }
+  panic("end op not implemented\n");
 }
 
 // Copy modified blocks from cache to log.
 static void
 write_log(int dev)
 {
-  int tail;
-
-  for (tail = 0; tail < log[dev].lh.n; tail++) {
-    struct buf *to = bread(dev, log[dev].start+tail+1); // log block
-    struct buf *from = bread(dev, log[dev].lh.block[tail]); // cache block
-    memmove(to->data, from->data, BSIZE);
-    bwrite(to);  // write the log
-    brelse(from);
-    brelse(to);
-  }
+  panic("write log not implemented\n");
 }
 
 static void
 commit(int dev)
 {
-  if (log[dev].lh.n > 0) {
-    write_log(dev);     // Write modified blocks from cache to log
-    write_head(dev);    // Write header to disk -- the real commit
-    install_trans(dev); // Now install writes to home locations
-    log[dev].lh.n = 0;
-    write_head(dev);    // Erase the transaction from the log
-  }
+  panic("haven't implemented commit\n");
 }
 
 // Caller has modified b->data and is done with the buffer.
@@ -225,33 +101,7 @@ commit(int dev)
 void
 log_write(struct buf *b)
 {
-  int i;
-
-  int dev = b->dev;
-//  if (log[dev].lh.n >= LOGSIZE || log[dev].lh.n >= log[dev].size - 1)
-//    panic("too big a transaction");
-//  if (log[dev].outstanding < 1)
-//    panic("log_write outside of trans");
-
-  acquire(&log[dev].lock);
-//  for (i = 0; i < log[dev].lh.n; i++) {
-//    if (log[dev].lh.block[i] == b->blockno)   // log absorbtion
-//      break;
-//  }
-
-  for (i = 0; i < log[dev].bindex; i++) {
-    if (b->blockno == log[dev].block[i].blockno) {
-      break;
-    }
-  }
-
-//  log[dev].lh.block[i] = b->blockno;
-  if (i == log[dev].bindex) {  // Add new block to log?
-    log[dev].block[bindex] = b->blockno;
-    log[dev].bindex++;
-    bpin(b);
-  }
-  release(&log[dev].lock);
+  panic("haven't implemented log_write\n");
 }
 
 
