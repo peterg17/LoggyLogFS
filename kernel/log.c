@@ -29,7 +29,14 @@ static void commit(int);
 void
 initlog(int dev, struct superblock *sb)
 {
-  panic("init log not implemented\n");
+  printf("initializing log...\n");
+  initlock(&log[dev].lock, "log");
+  for(int i = 0; i < MAXTRANS; i++) {
+    initlock(&log[dev].transactions[i].lock, "txn");
+  }
+  log[dev].start = sb->logstart;
+  log[dev].size = sb->nlog;
+  log[dev].dev = dev;
 }
 
 // Copy committed blocks from log to their home location
@@ -65,7 +72,27 @@ recover_from_log(int dev)
 void
 begin_op(int dev)
 {
-  panic("begin op not implemented\n");
+  int currTransIdx;
+  struct transaction *currTrans;
+
+  printf("in begin op\n");
+  acquire(&log[dev].lock);
+  currTransIdx = &log[dev].transidx;
+  currTrans = &log[dev].transactions[currTransIdx];
+  // do we also need to acquire transaction lock?
+  acquire(&currTrans->lock);
+
+  while(1){
+    // check if this will make the transaction full if not
+    if(currTrans->blocksWritten + ((currTrans->outstanding + 1)*MAXOPBLOCKS) > TRANSIZE) {
+      sleep(&log, &log[dev].lock);
+    } else {
+      currTrans->outstanding += 1;
+      release(&currTrans->lock);
+      release(&log[dev].lock);
+      break;
+    }
+  }
 }
 
 // called at the end of each FS system call.

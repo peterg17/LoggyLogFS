@@ -9,8 +9,8 @@
 #define MAXOPBLOCKS  10  // max # of blocks any FS op writes
 #define MAXTRANS     3
 #define MAXSYSCALL   5   // max syscalls per transaction (before triggering commit)
-#define TRANSIZE     (MAXOPBLOCKS*MAXSYSCALL) // max data blocks in one transaction
-#define LOGSIZE      (TRANSIZE*MAXTRANS)  // max data blocks in on-disk log
+#define TRANSIZE     50 // max data blocks in one transaction
+#define LOGSIZE      150  // max data blocks in on-disk log
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       2000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
