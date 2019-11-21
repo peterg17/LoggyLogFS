@@ -9,7 +9,7 @@ struct transaction {
   int seqNum; //sequence # of transaction (transaction id)
   int blocksWritten;
   int outstanding;
-  int block[TRANSIZE];
+  int block[TRANSSIZE];
 };
 
 struct logsuperblock {
@@ -20,7 +20,7 @@ struct logsuperblock {
 struct descriptorBlock {
   uint magic;
   int seqNum;
-  int block[TRANSIZE];
+  int block[TRANSSIZE];
 };
 
 struct commitBlock {
@@ -36,5 +36,6 @@ struct log {
   int dev;
   struct transaction transactions[MAXTRANS];
   int transidx;
+  int currSeqNum;
 };
 

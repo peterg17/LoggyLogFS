@@ -114,12 +114,23 @@ end_op(int dev)
   currtrans->outstanding -= 1;
   printf("number of outstanding syscalls in txn is: %d\n", currtrans->outstanding);
 
-  if(currtrans->outstanding < 0){
+  int txnSpaceLeft = 0;
+
+
+  if(currtrans->outstanding < 0) {
     panic("outstanding syscalls in txn is < 0!\n");
+  } else if (currtrans->outstanding == 0 && txnSpaceLeft) {
+    printf("starting the commit process\n", currtrans->seqNum);
+    // probably should do some other stuff like checking size of log and start commit
+    // if txn is full, commit and stuff
+
+    // else we're gonna wakeup the log
+  } else {
+    wakeup(&log);
   }
 
-  // can we check in begin op the # of outstanding syscalls along with length
-  
+  release(&currtrans->lock);  
+  release(&log[dev].lock);
 
 }
 
@@ -148,7 +159,8 @@ commit(int dev)
 void
 log_write(struct buf *b)
 {
-  panic("haven't implemented log_write\n");
+  printf("in log write function\n");
+  
 }
 
 
