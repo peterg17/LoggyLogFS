@@ -100,7 +100,27 @@ begin_op(int dev)
 void
 end_op(int dev)
 {
-  panic("end op not implemented\n");
+  printf("in end op function\n");
+
+  // we're just going to change the # of outstanding syscalls
+  // defer the commit to somewhere else (fsync, when txn is full)
+  int currTxnIndex;
+  struct transaction *currtrans;
+
+  acquire(&log[dev].lock);
+  currTxnIndex = log[dev].transidx;
+  currtrans = &log[dev].transactions[currTxnIndex];
+  acquire(&currtrans->lock);
+  currtrans->outstanding -= 1;
+  printf("number of outstanding syscalls in txn is: %d\n", currtrans->outstanding);
+
+  if(currtrans->outstanding < 0){
+    panic("outstanding syscalls in txn is < 0!\n");
+  }
+
+  // can we check in begin op the # of outstanding syscalls along with length
+  
+
 }
 
 // Copy modified blocks from cache to log.
