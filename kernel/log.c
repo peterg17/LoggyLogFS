@@ -23,13 +23,18 @@ that allows for several types of concurrency:
 
 struct log log[NDISK];
 
-static void recover_from_log(int);
-static void commit(int);
+// static void recover_from_log(int);
+// static void commit(int);
 
 void
 initlog(int dev, struct superblock *sb)
 {
   printf("initializing log...\n");
+
+  // this is relevant in case we make the single header block too big
+  if (sizeof(struct logheader) >= BSIZE)
+    panic("initlog: too big logheader");
+
   initlock(&log[dev].lock, "log");
   for(int i = 0; i < MAXTRANS; i++) {
     initlock(&log[dev].transactions[i].lock, "txn");
@@ -40,33 +45,33 @@ initlog(int dev, struct superblock *sb)
 }
 
 // Copy committed blocks from log to their home location
-static void
-install_trans(int dev)
-{
-  panic("install trans not implemented\n");
-}
+// static void
+// install_trans(int dev)
+// {
+//   panic("install trans not implemented\n");
+// }
 
 // Read the log header from disk into the in-memory log header
-static void
-read_head(int dev)
-{
-  panic("read head not implemented\n");
-}
+// static void
+// read_head(int dev)
+// {
+//   panic("read head not implemented\n");
+// }
 
 // Write in-memory log header to disk.
 // This is the true point at which the
 // current transaction commits.
-static void
-write_head(int dev)
-{
-  panic("write head not implemented\n");
-}
+// static void
+// write_head(int dev)
+// {
+//   panic("write head not implemented\n");
+// }
 
-static void
-recover_from_log(int dev)
-{
-  panic("recover from log not implemented\n");
-}
+// static void
+// recover_from_log(int dev)
+// {
+//   panic("recover from log not implemented\n");
+// }
 
 // called at the start of each FS system call.
 void
@@ -77,14 +82,14 @@ begin_op(int dev)
 
   printf("in begin op\n");
   acquire(&log[dev].lock);
-  currTransIdx = &log[dev].transidx;
+  currTransIdx = log[dev].transcount % 2;
   currTrans = &log[dev].transactions[currTransIdx];
   // do we also need to acquire transaction lock?
   acquire(&currTrans->lock);
 
   while(1){
     // check if this will make the transaction full if not
-    if(currTrans->blocksWritten + ((currTrans->outstanding + 1)*MAXOPBLOCKS) > TRANSIZE) {
+    if(currTrans->blocksWritten + ((currTrans->outstanding + 1)*MAXOPBLOCKS) > TRANSSIZE) {
       sleep(&log, &log[dev].lock);
     } else {
       currTrans->outstanding += 1;
@@ -108,7 +113,7 @@ end_op(int dev)
   struct transaction *currtrans;
 
   acquire(&log[dev].lock);
-  currTxnIndex = log[dev].transidx;
+  currTxnIndex = log[dev].transcount % 2;
   currtrans = &log[dev].transactions[currTxnIndex];
   acquire(&currtrans->lock);
   currtrans->outstanding -= 1;
@@ -135,17 +140,17 @@ end_op(int dev)
 }
 
 // Copy modified blocks from cache to log.
-static void
-write_log(int dev)
-{
-  panic("write log not implemented\n");
-}
+// static void
+// write_log(int dev)
+// {
+//   panic("write log not implemented\n");
+// }
 
-static void
-commit(int dev)
-{
-  panic("haven't implemented commit\n");
-}
+// static void
+// commit(int dev)
+// {
+//   panic("haven't implemented commit\n");
+// }
 
 // Caller has modified b->data and is done with the buffer.
 // Record the block number and pin in the cache by increasing refcnt.
@@ -160,7 +165,30 @@ void
 log_write(struct buf *b)
 {
   printf("in log write function\n");
+
+  int i;
+  int dev = b->dev;
+  int currTransIdx = log[dev].transcount % 2;
+  struct transaction *currTrans = &log[dev].transactions[currTransIdx];
+
+  if (log[dev].lh.n >= LOGSIZE || log[dev].lh.n >= log[dev].size - 1)
+    panic("too big a transaction");
+  if (currTrans->outstanding < 1)
+    panic("log_write outside of trans");
+
+  acquire(&log[dev].lock);
   
+  for (i = 0; i < log[dev].lh.n; i++) {
+    if (log[dev].lh.block[i] == b->blockno)
+      break;  // log absorption -- if block has changed already we're just gonna update
+  }
+  log[dev].lh.block[i] = b->blockno;
+  if (i == log[dev].lh.n) {
+    // we are at the end of the logheader, means we added new block
+    bpin(b); // need to somehow make sure that we can't write 2 different versions of block across transactions
+    log[dev].lh.n++;
+  }
+  release(&log[dev].lock);
 }
 
 

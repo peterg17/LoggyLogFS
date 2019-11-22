@@ -1,7 +1,3 @@
-#include "spinlock.h"
-#include "param.h"
-#include "types.h"
-
 #define DESCRIPTORMAGIC 0xb32803b
 
 struct transaction {
@@ -12,9 +8,15 @@ struct transaction {
   int block[TRANSSIZE];
 };
 
-struct logsuperblock {
-  int offset;
-  int startSeqNum;
+// struct logsuperblock {
+//   int offset;
+//   int startSeqNum;
+// };
+
+// for first simple version of concurrent logging, we can use one header block
+struct logheader {
+  int n;
+  int block[LOGSIZE];
 };
 
 struct descriptorBlock {
@@ -28,6 +30,9 @@ struct commitBlock {
   int seqNum;
 };
 
+// currently we just have 2 transactions, find the current one 
+// by doing modulo 2 on transcount, we just keep incrementing the 
+// transcount
 struct log {
   struct spinlock lock;
   int start;
@@ -35,7 +40,8 @@ struct log {
   int committing;
   int dev;
   struct transaction transactions[MAXTRANS];
-  int transidx;
+  int transcount;
   int currSeqNum;
+  struct logheader lh;
 };
 

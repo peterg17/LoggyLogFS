@@ -7,11 +7,11 @@
 #define ROOTDEV       0  // device number of file system root disk
 #define MAXARG       32  // max exec arguments
 #define MAXOPBLOCKS  10  // max # of blocks any FS op writes
-#define MAXTRANS     3
+#define MAXTRANS     2
 #define MAXSYSCALL   5   // max syscalls per transaction (before triggering commit)
-#define TRANSSIZE    48 // 5 syscalls and leave room for 2 blocks for desc/commit blocks
-#define LOGSIZE      ((TRANSSIZE+2)*3)  // max data blocks in on-disk log
-#define NBUF         ((TRANSSIZE+2)*3)  // size of disk block cache
+#define TRANSSIZE    50 // 5 syscalls and leave room for 2 blocks for desc/commit blocks
+#define LOGSIZE      100  // max data blocks in on-disk log
+#define NBUF         100  // size of disk block cache
 #define FSSIZE       2000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
 #define NDISK        2
