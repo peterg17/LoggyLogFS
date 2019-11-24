@@ -25,6 +25,7 @@ struct log log[NDISK];
 
 // static void recover_from_log(int);
 // static void commit(int);
+void print_log_header(int);
 
 void
 initlog(int dev, struct superblock *sb)
@@ -80,7 +81,7 @@ begin_op(int dev)
   int currTransIdx;
   struct transaction *currTrans;
 
-  printf("in begin op\n");
+  // printf("in begin op\n");
   acquire(&log[dev].lock);
   currTransIdx = log[dev].transcount % 2;
   currTrans = &log[dev].transactions[currTransIdx];
@@ -105,7 +106,7 @@ begin_op(int dev)
 void
 end_op(int dev)
 {
-  printf("in end op function\n");
+  // printf("in end op function\n");
 
   // we're just going to change the # of outstanding syscalls
   // defer the commit to somewhere else (fsync, when txn is full)
@@ -117,7 +118,7 @@ end_op(int dev)
   currtrans = &log[dev].transactions[currTxnIndex];
   acquire(&currtrans->lock);
   currtrans->outstanding -= 1;
-  printf("number of outstanding syscalls in txn is: %d\n", currtrans->outstanding);
+  // printf("number of outstanding syscalls in txn is: %d\n", currtrans->outstanding);
 
   int txnSpaceLeft = 0;
 
@@ -164,12 +165,13 @@ end_op(int dev)
 void
 log_write(struct buf *b)
 {
-  printf("in log write function\n");
+  // printf("in log write function\n");
 
   int i;
   int dev = b->dev;
   int currTransIdx = log[dev].transcount % 2;
   struct transaction *currTrans = &log[dev].transactions[currTransIdx];
+  print_log_header(dev);
 
   if (log[dev].lh.n >= LOGSIZE || log[dev].lh.n >= log[dev].size - 1)
     panic("too big a transaction");
@@ -189,6 +191,20 @@ log_write(struct buf *b)
     log[dev].lh.n++;
   }
   release(&log[dev].lock);
+}
+
+// prints the current transaction
+void
+print_log_header(int dev)
+{
+  // int currTransIdx = log[dev].transcount % 2;
+  // struct transaction *currTrans = &log[dev].transactions[currTransIdx];
+  int i;
+  printf("[");
+  for(i = 1; i < LOGSIZE; i++) {
+    printf("%d, ", log[dev].lh.block[i]);
+  }
+  printf("]\n");
 }
 
 
