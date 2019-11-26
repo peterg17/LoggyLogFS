@@ -21,10 +21,14 @@ that allows for several types of concurrency:
 
 */
 
+// TODO: figure out when/how to reset 
+// the logheader when it becomes full
+
+
 struct log log[NDISK];
 
 // static void recover_from_log(int);
-// static void commit(int);
+static void commit(int, void *);
 void print_log_header(int);
 
 void
@@ -65,11 +69,20 @@ initlog(int dev, struct superblock *sb)
 // Write in-memory log header to disk.
 // This is the true point at which the
 // current transaction commits.
-// static void
-// write_head(int dev)
-// {
-//   panic("write head not implemented\n");
-// }
+static void
+write_head(int dev, void *logheader)
+{
+  struct logheader *lh = (struct logheader *) logheader;
+  struct buf *buf = bread(dev, log[dev].start);
+  struct logheader *hb = (struct logheader *) (buf->data);
+  int i;
+  hb->n = lh->n;
+  for(i = 0; i < lh->n; i++) {
+    hb->block[i] = lh->block[i];
+  }
+  bwrite(buf);
+  brelse(buf);
+}
 
 // static void
 // recover_from_log(int dev)
@@ -164,7 +177,7 @@ end_op(int dev)
   if(do_commit){
     // why do we call commit w/o holding locks?
     // can we still hold locks because we aren't sleeping during commit?
-    //commit(dev);
+    commit(dev, &snapshotLH);
     acquire(&currtrans->lock);
 
     // TODO: when we are incrementing the transaction counter, make sure that there are no
@@ -182,21 +195,31 @@ end_op(int dev)
 }
 
 // Copy modified blocks from cache to log.
-// static void
-// write_log(int dev)
-// {
-//   panic("write log not implemented\n");
-// }
+static void
+write_log(int dev, void *logheader)
+{
+  struct logheader *lh = (struct logheader *) logheader;
+  int tail;
+  for(tail = 0; tail < lh->n; tail++) {
+    struct buf *to = bread(dev, log[dev].start+tail+1); // log block
+    struct buf *from = bread(dev, lh->block[tail]); // cached block
+    memmove(to->data, from->data, BSIZE);
+    bwrite(to); // writing the log block
+    brelse(from);
+    brelse(to);
+  }
+}
 
-// static void
-// commit(int dev)
-// {
-//   if (log[dev].lh.n > 0) {
-//     write_log(dev);     // Write modified blocks from cache to log
-//     write_head(dev);    // Write header to disk -- the real commit
-//     // don't install transaction yet, defer it until on-disk log is full enough
-//   }
-// }
+static void
+commit(int dev, void *logheader)
+{
+  struct logheader *lh = (struct logheader *) logheader;
+  if(lh->n > 0) {
+    write_log(dev, logheader);     // Write modified blocks from cache to log
+    write_head(dev, logheader);    // Write header to disk -- the real commit
+    // don't install transaction yet, defer it until on-disk log is full enough
+  }
+}
 
 // Caller has modified b->data and is done with the buffer.
 // Record the block number and pin in the cache by increasing refcnt.
