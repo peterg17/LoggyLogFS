@@ -1,5 +1,4 @@
 #include "types.h"
-#include "riscv.h"
 #include "defs.h"
 #include "param.h"
 #include "spinlock.h"
@@ -7,6 +6,7 @@
 #include "fs.h"
 #include "buf.h"
 #include "log.h"
+#include "string.h"
 
 
 /*
@@ -156,7 +156,7 @@ end_op(int dev)
 
   // TODO: find out if we need a snapshot of the logheader
   // at the time we want to commit, because it is changing under us
-  memcpy(snapshotLH, log[dev].lh, sizeof(log[dev].lh));
+  memmove(snapshotLH, log[dev].lh, sizeof(log[dev].lh));
 
   release(&currtrans->lock);  
   release(&log[dev].lock);
