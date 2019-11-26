@@ -128,7 +128,7 @@ end_op(int dev)
   int currTxnIndex;
   // int isTxnFull;
   struct transaction *currtrans;
-  struct logheader *snapshotLH;
+  struct logheader snapshotLH;
 
   int do_commit = 0;
 
@@ -156,7 +156,7 @@ end_op(int dev)
 
   // TODO: find out if we need a snapshot of the logheader
   // at the time we want to commit, because it is changing under us
-  memmove(snapshotLH, &log[dev].lh, sizeof(log[dev].lh));
+  memmove(&snapshotLH, &log[dev].lh, sizeof(log[dev].lh));
 
   release(&currtrans->lock);  
   release(&log[dev].lock);
@@ -164,7 +164,7 @@ end_op(int dev)
   if(do_commit){
     // why do we call commit w/o holding locks?
     // can we still hold locks because we aren't sleeping during commit?
-    commit(dev);
+    //commit(dev);
     acquire(&currtrans->lock);
 
     // TODO: when we are incrementing the transaction counter, make sure that there are no
