@@ -5,6 +5,7 @@ struct transaction {
   int seqNum; //sequence # of transaction (transaction id)
   int blocksWritten;
   int outstanding;
+  int committing;
   int block[TRANSSIZE];
 };
 
@@ -37,7 +38,6 @@ struct log {
   struct spinlock lock;
   int start;
   int size;
-  int committing;
   int dev;
   struct transaction transactions[MAXTRANS];
   int transcount;

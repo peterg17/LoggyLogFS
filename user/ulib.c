@@ -3,6 +3,14 @@
 #include "kernel/fcntl.h"
 #include "user/user.h"
 
+void strcat(char *s, char *t)
+{
+  while (*s)
+    ++s;
+  while ((*s++ = *t++))
+    ;
+}
+
 char*
 strcpy(char *s, const char *t)
 {

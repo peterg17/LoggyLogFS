@@ -30,6 +30,9 @@ void print_log_header(int);
 void
 initlog(int dev, struct superblock *sb)
 {
+  // TODO: figure out how to handle installing blocks,
+  // idea: have a child process here that never returns it just
+  // keeps spinning and checking for installing the transaction
   printf("initializing log...\n");
 
   // this is relevant in case we make the single header block too big
@@ -85,17 +88,26 @@ begin_op(int dev)
   acquire(&log[dev].lock);
   currTransIdx = log[dev].transcount % 2;
   currTrans = &log[dev].transactions[currTransIdx];
-  // do we also need to acquire transaction lock?
+  release(&log[dev].lock);
   acquire(&currTrans->lock);
+  
 
   while(1){
     // check if this will make the transaction full if not
-    if(currTrans->blocksWritten + ((currTrans->outstanding + 1)*MAXOPBLOCKS) > TRANSSIZE) {
-      sleep(&log, &log[dev].lock);
+    // TODO: do we sleep on a full transaction?? 
+
+    if (currTrans->committing) {
+      // i'm pretty sure we need to sleep on a committing transaction 
+      sleep(currTrans, &currTrans->lock);
+    } else if(currTrans->blocksWritten + ((currTrans->outstanding + 1)*MAXOPBLOCKS) > TRANSSIZE) {
+      // Explanation: essentially what we are doing here is planning for the worst 
+      // ie-> pretending that every syscall yet to complete will take MAXOPBLOCKS when they likely wont
+      // we wakeup this transaction when each outstanding syscall finishes to check what actually happened
+      // TODO: answer if the transaction counter would ever change between a begin_op and an end_op?
+      sleep(currTrans, &currTrans->lock);
     } else {
       currTrans->outstanding += 1;
       release(&currTrans->lock);
-      release(&log[dev].lock);
       break;
     }
   }
@@ -111,32 +123,58 @@ end_op(int dev)
   // we're just going to change the # of outstanding syscalls
   // defer the commit to somewhere else (fsync, when txn is full)
   int currTxnIndex;
+  // int isTxnFull;
   struct transaction *currtrans;
+  struct logheader *snapshotLH;
+
+  int do_commit = 0;
 
   acquire(&log[dev].lock);
-  currTxnIndex = log[dev].transcount % 2;
+  // TODO: replace this 2 aka magic number with the number of transactions variable
+  currTxnIndex = log[dev].transcount % 2; 
   currtrans = &log[dev].transactions[currTxnIndex];
   acquire(&currtrans->lock);
   currtrans->outstanding -= 1;
   // printf("number of outstanding syscalls in txn is: %d\n", currtrans->outstanding);
-
-  int txnSpaceLeft = 0;
-
+  // isTxnFull = (currtrans->blocksWritten + MAXOPBLOCKS) > TRANSSIZE;
 
   if(currtrans->outstanding < 0) {
     panic("outstanding syscalls in txn is < 0!\n");
-  } else if (currtrans->outstanding == 0 && txnSpaceLeft) {
+  } else if (currtrans->outstanding == 0 && (currtrans->blocksWritten == TRANSSIZE)) {
     printf("starting the commit process\n", currtrans->seqNum);
     // probably should do some other stuff like checking size of log and start commit
     // if txn is full, commit and stuff
-
+    do_commit = 1;
+    currtrans->committing = 1;
     // else we're gonna wakeup the log
   } else {
-    wakeup(&log);
+    wakeup(currtrans); 
   }
+
+  // TODO: find out if we need a snapshot of the logheader
+  // at the time we want to commit, because it is changing under us
+  memcpy(snapshotLH, log[dev].lh, sizeof(log[dev].lh));
 
   release(&currtrans->lock);  
   release(&log[dev].lock);
+  
+  if(do_commit){
+    // why do we call commit w/o holding locks?
+    // can we still hold locks because we aren't sleeping during commit?
+    commit(dev);
+    acquire(&currtrans->lock);
+
+    // TODO: when we are incrementing the transaction counter, make sure that there are no
+    // outstanding syscalls, because that could lead to a hairy situation
+
+    currtrans->committing = 0;
+    // we have no wakeup call here because we don't sleep when committing
+    // TODO: possible wakeup call on each transaction lock
+    // because we can't possibly write to a transaction while its committing
+    wakeup(currtrans);
+    release(&currtrans->lock);
+  }
+
 
 }
 
@@ -147,11 +185,15 @@ end_op(int dev)
 //   panic("write log not implemented\n");
 // }
 
-// static void
-// commit(int dev)
-// {
-//   panic("haven't implemented commit\n");
-// }
+static void
+commit(int dev)
+{
+  if (log[dev].lh.n > 0) {
+    write_log(dev);     // Write modified blocks from cache to log
+    write_head(dev);    // Write header to disk -- the real commit
+    // don't install transaction yet, defer it until on-disk log is full enough
+  }
+}
 
 // Caller has modified b->data and is done with the buffer.
 // Record the block number and pin in the cache by increasing refcnt.
@@ -179,6 +221,7 @@ log_write(struct buf *b)
     panic("log_write outside of trans");
 
   acquire(&log[dev].lock);
+  acquire(&currTrans->lock);
   
   for (i = 0; i < log[dev].lh.n; i++) {
     if (log[dev].lh.block[i] == b->blockno)
@@ -189,7 +232,10 @@ log_write(struct buf *b)
     // we are at the end of the logheader, means we added new block
     bpin(b); // need to somehow make sure that we can't write 2 different versions of block across transactions
     log[dev].lh.n++;
+    currTrans->blocksWritten++;
   }
+  printf("blocks written to transaction: %d\n", currTrans->blocksWritten);
+  release(&currTrans->lock);
   release(&log[dev].lock);
 }
 
@@ -206,5 +252,3 @@ print_log_header(int dev)
   }
   printf("]\n");
 }
-
-
