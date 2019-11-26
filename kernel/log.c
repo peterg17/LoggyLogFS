@@ -1,4 +1,5 @@
 #include "types.h"
+#include "riscv.h"
 #include "defs.h"
 #include "param.h"
 #include "spinlock.h"
@@ -6,7 +7,6 @@
 #include "fs.h"
 #include "buf.h"
 #include "log.h"
-#include "string.h"
 
 
 /*
@@ -156,7 +156,7 @@ end_op(int dev)
 
   // TODO: find out if we need a snapshot of the logheader
   // at the time we want to commit, because it is changing under us
-  memmove(snapshotLH, log[dev].lh, sizeof(log[dev].lh));
+  memmove(snapshotLH, &log[dev].lh, sizeof(log[dev].lh));
 
   release(&currtrans->lock);  
   release(&log[dev].lock);
@@ -188,15 +188,15 @@ end_op(int dev)
 //   panic("write log not implemented\n");
 // }
 
-static void
-commit(int dev)
-{
-  if (log[dev].lh.n > 0) {
-    write_log(dev);     // Write modified blocks from cache to log
-    write_head(dev);    // Write header to disk -- the real commit
-    // don't install transaction yet, defer it until on-disk log is full enough
-  }
-}
+// static void
+// commit(int dev)
+// {
+//   if (log[dev].lh.n > 0) {
+//     write_log(dev);     // Write modified blocks from cache to log
+//     write_head(dev);    // Write header to disk -- the real commit
+//     // don't install transaction yet, defer it until on-disk log is full enough
+//   }
+// }
 
 // Caller has modified b->data and is done with the buffer.
 // Record the block number and pin in the cache by increasing refcnt.
