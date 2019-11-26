@@ -96,6 +96,9 @@ begin_op(int dev)
     // check if this will make the transaction full if not
     // TODO: do we sleep on a full transaction?? 
 
+    // TODO: figure out how to block syscalls from end_op, where we start committing
+    // we currently don't handle case where a syscall starts while the transaction has
+    // started comimtting but hasn't updated its transaction counter
     if (currTrans->committing) {
       // i'm pretty sure we need to sleep on a committing transaction 
       sleep(currTrans, &currTrans->lock);
