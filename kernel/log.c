@@ -120,6 +120,7 @@ begin_op(int dev)
       // ie-> pretending that every syscall yet to complete will take MAXOPBLOCKS when they likely wont
       // we wakeup this transaction when each outstanding syscall finishes to check what actually happened
       // TODO: answer if the transaction counter would ever change between a begin_op and an end_op?
+      printf("sleeping on full log!\n");
       sleep(currTrans, &currTrans->lock);
     } else {
       currTrans->outstanding += 1;
