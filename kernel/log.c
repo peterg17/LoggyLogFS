@@ -135,12 +135,12 @@ begin_op(int dev)
 void
 end_op(int dev)
 {
-  // printf("in end op function\n");
+  printf("in end op function\n");
 
   // we're just going to change the # of outstanding syscalls
   // defer the commit to somewhere else (fsync, when txn is full)
   int currTxnIndex;
-  // int isTxnFull;
+  int isTxnFull;
   struct transaction *currtrans;
   struct logheader snapshotLH;
 
@@ -153,14 +153,14 @@ end_op(int dev)
   acquire(&currtrans->lock);
   currtrans->outstanding -= 1;
   // printf("number of outstanding syscalls in txn is: %d\n", currtrans->outstanding);
-  // isTxnFull = (currtrans->blocksWritten + MAXOPBLOCKS) > TRANSSIZE;
+  isTxnFull = (currtrans->blocksWritten + MAXOPBLOCKS) > TRANSSIZE;
 
   if(currtrans->outstanding < 0) {
     panic("outstanding syscalls in txn is < 0!\n");
-  } else if (currtrans->outstanding == 0 && (currtrans->blocksWritten == TRANSSIZE)) {
+  } else if (currtrans->outstanding == 0 && isTxnFull) {
     printf("starting the commit process\n", currtrans->seqNum);
     // probably should do some other stuff like checking size of log and start commit
-    // if txn is full, commit and stuff
+    // if txn is full, commit and stuff 
     do_commit = 1;
     currtrans->committing = 1;
     // else we're gonna wakeup the log
@@ -178,12 +178,21 @@ end_op(int dev)
   if(do_commit){
     // why do we call commit w/o holding locks?
     // can we still hold locks because we aren't sleeping during commit?
+    
+    // 1. block new syscalls somehow? by sleeping on curr trans
+    // sleep(currtrans, &currtrans->lock);
+
+    // switch to new transactions
+    acquire(&log[dev].lock);
+    log[dev].transcount += 1;
+    release(&log[dev].lock);
+    
+
     commit(dev, &snapshotLH);
     acquire(&currtrans->lock);
 
     // TODO: when we are incrementing the transaction counter, make sure that there are no
     // outstanding syscalls, because that could lead to a hairy situation
-
     currtrans->committing = 0;
     // we have no wakeup call here because we don't sleep when committing
     // TODO: possible wakeup call on each transaction lock
