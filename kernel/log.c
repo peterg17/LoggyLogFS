@@ -44,7 +44,7 @@ initlog(int dev, struct superblock *sb)
     panic("initlog: too big logheader");
 
   initlock(&log[dev].lock, "log");
-  for(int i = 0; i < MAXTRANS; i++) {
+  for(int i = 0; i < NTRANS; i++) {
     initlock(&log[dev].transactions[i].lock, "txn");
   }
   log[dev].start = sb->logstart;
@@ -53,11 +53,25 @@ initlog(int dev, struct superblock *sb)
 }
 
 // Copy committed blocks from log to their home location
-// static void
-// install_trans(int dev)
-// {
-//   panic("install trans not implemented\n");
-// }
+static void
+install_trans(int dev)
+{
+  printf("installing blocks to their home locations...\n");
+  int tail;
+
+  // I think the code is the same for installing as it was before
+  // at least in our simple scheme where we use one logheader and clobber
+  // it each time, rather than a circular array of descriptor ... commit block pairs
+  for (tail = 0; tail < log[dev].lh.n; tail++) {
+    struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
+    struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
+    memmove(dbuf->data, lbuf->data, BSIZE);  // move log block to its destination
+    bwrite(dbuf);
+    bunpin(dbuf);
+    brelse(lbuf);
+    brelse(dbuf);
+  }
+}
 
 // Read the log header from disk into the in-memory log header
 // static void
@@ -114,6 +128,7 @@ begin_op(int dev)
     // started comimtting but hasn't updated its transaction counter
     if (currTrans->committing) {
       // i'm pretty sure we need to sleep on a committing transaction 
+      printf("sleeping on currently committing transaction\n");
       sleep(currTrans, &currTrans->lock);
     } else if(currTrans->blocksWritten + ((currTrans->outstanding + 1)*MAXOPBLOCKS) > TRANSSIZE) {
       // Explanation: essentially what we are doing here is planning for the worst 
@@ -129,6 +144,19 @@ begin_op(int dev)
     }
   }
 }
+
+// returns 1 if the on-disk log is >50% full, 0 otherwise
+int
+is_ondisklog_full(int dev)
+{
+  int isLogFull;
+  int maxCapacity = LOGSIZE / 2;
+  acquire(&log[dev].lock);
+  isLogFull = log[dev].lh.n > maxCapacity;
+  release(&log[dev].lock);
+  return isLogFull;
+}
+
 
 // called at the end of each FS system call.
 // commits if this was the last outstanding operation.
@@ -194,19 +222,24 @@ end_op(int dev)
     
 
     commit(dev, &snapshotLH);
-    acquire(&currtrans->lock);
 
+    if(is_ondisklog_full(dev)) {
+      install_trans(dev);
+      log[dev].lh.n = 0;
+      write_head(dev, &log[dev].lh);
+    }
+
+    acquire(&currtrans->lock);
     // TODO: when we are incrementing the transaction counter, make sure that there are no
     // outstanding syscalls, because that could lead to a hairy situation
     currtrans->committing = 0;
+    currtrans->blocksWritten = 0;
     // we have no wakeup call here because we don't sleep when committing
     // TODO: possible wakeup call on each transaction lock
     // because we can't possibly write to a transaction while its committing
     wakeup(currtrans);
     release(&currtrans->lock);
   }
-
-
 }
 
 // Copy modified blocks from cache to log.
@@ -276,6 +309,7 @@ log_write(struct buf *b)
     currTrans->blocksWritten++;
   }
   printf("blocks written to transaction: %d\n", currTrans->blocksWritten);
+  printf("current logheader sum: %d\n", log[dev].lh.n);
   release(&currTrans->lock);
   release(&log[dev].lock);
 }

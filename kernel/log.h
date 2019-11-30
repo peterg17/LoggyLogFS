@@ -39,7 +39,7 @@ struct log {
   int start;
   int size;
   int dev;
-  struct transaction transactions[MAXTRANS];
+  struct transaction transactions[NTRANS];
   int transcount;
   int currSeqNum;
   struct logheader lh;
