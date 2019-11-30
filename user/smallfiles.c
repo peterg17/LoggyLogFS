@@ -19,7 +19,6 @@ int main(int argc, char *argv[])  {
 
   int fd, i, nfiles;
   char *nraw = 0;
-  char fname;
 
   if(argc > 1) {
     nraw = argv[1];
@@ -38,10 +37,19 @@ int main(int argc, char *argv[])  {
 
     printf("creating a file\n");
 
-    fname = (char) (i + 65);
-    fd = open(&fname, O_CREATE|O_RDWR);
+    int fileNameLength;
+    int recycledI;
+    fileNameLength = (i / 26) + 1; // cycle through the alphabet, each time increase file length by 1
+    recycledI = i % 26;
+
+    char fname[fileNameLength];
+    for (int j = 0; j < fileNameLength; j++) {
+      fname[j] = (char) (recycledI + 65);
+    }
+
+    fd = open(fname, O_CREATE|O_RDWR);
     if(fd < 0){
-      printf("Error: creat small failed!\n");
+      printf("Error: create small failed!\n");
       exit(1);
     }
     write(fd, "aaa", 3);

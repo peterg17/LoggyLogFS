@@ -135,7 +135,7 @@ begin_op(int dev)
 void
 end_op(int dev)
 {
-  printf("in end op function\n");
+  // printf("in end op function\n");
 
   // we're just going to change the # of outstanding syscalls
   // defer the commit to somewhere else (fsync, when txn is full)
@@ -181,6 +181,11 @@ end_op(int dev)
     
     // 1. block new syscalls somehow? by sleeping on curr trans
     // sleep(currtrans, &currtrans->lock);
+
+    // if we are trying to commit but there isn't more space in log,
+    // we need to sleep on the current transaction so we don't overwrite
+    // the on-disk log
+
 
     // switch to new transactions
     acquire(&log[dev].lock);
@@ -252,7 +257,7 @@ log_write(struct buf *b)
   print_log_header(dev);
 
   if (log[dev].lh.n >= LOGSIZE || log[dev].lh.n >= log[dev].size - 1)
-    panic("too big a transaction");
+    panic("log is full");
   if (currTrans->outstanding < 1)
     panic("log_write outside of trans");
 
