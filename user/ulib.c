@@ -3,6 +3,7 @@
 #include "kernel/fcntl.h"
 #include "user/user.h"
 
+
 void strcat(char *s, char *t)
 {
   while (*s)

@@ -144,7 +144,8 @@ UPROGS=\
 	$U/_alloctest\
 	$U/_bigfile\
 	$U/_strcattest\
-        $U/_smallfiles\
+  $U/_smallfiles\
+	$U/_smallfilesbenchmark\
 
 fs.img: mkfs/mkfs README user/xargstest.sh $(UPROGS)
 	mkfs/mkfs fs.img README user/xargstest.sh $(UPROGS)

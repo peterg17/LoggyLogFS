@@ -31,6 +31,10 @@ struct log log[NDISK];
 static void commit(int, void *);
 void print_log_header(int);
 
+// TODO: can we write something in c that will take in a printf string
+//       and arbitrary number of arguments, and check a boolean that only
+//       calls to printf if we set the debug variable to 1?
+
 void
 initlog(int dev, struct superblock *sb)
 {
@@ -56,7 +60,7 @@ initlog(int dev, struct superblock *sb)
 static void
 install_trans(int dev)
 {
-  printf("installing blocks to their home locations...\n");
+  // printf("installing blocks to their home locations...\n");
   int tail;
 
   // I think the code is the same for installing as it was before
@@ -287,7 +291,7 @@ log_write(struct buf *b)
   int dev = b->dev;
   int currTransIdx = log[dev].transcount % 2;
   struct transaction *currTrans = &log[dev].transactions[currTransIdx];
-  print_log_header(dev);
+  // print_log_header(dev);
 
   if (log[dev].lh.n >= LOGSIZE || log[dev].lh.n >= log[dev].size - 1)
     panic("log is full");
@@ -308,8 +312,8 @@ log_write(struct buf *b)
     log[dev].lh.n++;
     currTrans->blocksWritten++;
   }
-  printf("blocks written to transaction: %d\n", currTrans->blocksWritten);
-  printf("current logheader sum: %d\n", log[dev].lh.n);
+  // printf("blocks written to transaction: %d\n", currTrans->blocksWritten);
+  // printf("current logheader sum: %d\n", log[dev].lh.n);
   release(&currTrans->lock);
   release(&log[dev].lock);
 }

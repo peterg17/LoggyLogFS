@@ -9,7 +9,8 @@
 #include "kernel/riscv.h"
 #include "user.h"
 
-void create_small_files(int n) 
+// returns the number of cycles that creating n files took
+int create_small_files(int n) 
 {
   int fd;
   int cycles;
@@ -17,9 +18,6 @@ void create_small_files(int n)
   cycles = uptime();
 
   for (int i = 0; i < n; i++) {
-
-    // printf("creating a file\n");
-
     int fileNameLength;
     int recycledI;
     fileNameLength = (i / 26) + 1; // cycle through the alphabet, each time increase file length by 1
@@ -46,29 +44,30 @@ void create_small_files(int n)
   }
 
   cycles = uptime() - cycles;
-  printf("cycles elapsed during smallfiles benchmark: %d\n", cycles);
+  return cycles;
 }
 
 int main(int argc, char *argv[])
 {
-  int nfiles, i;
-  char *nraw = 0;
+  int nfiles, tests, i, avgClockCycles;
+  int clockCycles = 0;
 
-  if(argc > 1) {
-    nraw = argv[1];
-  } else {
-    printf("Usage: smallfiles <num files>!\n");
+  if(argc != 1) {
+    printf("No argument to smallfiles benchmark\n");
     exit(1);
+  } 
+
+  nfiles = 1000;
+  tests = 100;
+
+  for (i = 0; i < tests; i++) {
+    printf("creating %d files...\n", nfiles);
+    clockCycles += create_small_files(nfiles);
   }
 
-  nfiles = 0;
-  for (i = 0; nraw[i] != '\0'; i++)
-      nfiles = nfiles * 10 + nraw[i] - '0';
-
-  printf("creating %d files...\n", nfiles);
-
-  create_small_files(nfiles);
-
+  avgClockCycles = clockCycles / tests;
+  printf("average clock cycles for creating %d files is --> %d\n", nfiles, avgClockCycles);
+  
   return 0;
 
 }
