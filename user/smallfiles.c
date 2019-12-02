@@ -1,12 +1,6 @@
 #include "kernel/param.h"
 #include "kernel/types.h"
-#include "kernel/stat.h"
-#include "user/user.h"
-#include "kernel/fs.h"
 #include "kernel/fcntl.h"
-#include "kernel/syscall.h"
-#include "kernel/memlayout.h"
-#include "kernel/riscv.h"
 #include "user.h"
 
 void create_small_files(int n) 
@@ -69,6 +63,5 @@ int main(int argc, char *argv[])
 
   create_small_files(nfiles);
 
-  return 0;
-
+  exit(0);
 }

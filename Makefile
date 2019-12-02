@@ -146,6 +146,7 @@ UPROGS=\
 	$U/_strcattest\
   $U/_smallfiles\
 	$U/_smallfilesbenchmark\
+	$U/_sync\
 
 fs.img: mkfs/mkfs README user/xargstest.sh $(UPROGS)
 	mkfs/mkfs fs.img README user/xargstest.sh $(UPROGS)

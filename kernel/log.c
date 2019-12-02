@@ -175,7 +175,7 @@ is_ondisklog_full(int dev)
 
 
 void
-sync_helper(int dev, void *logheader, void *trans) {
+sync_helper(int dev) {
   // why do we call commit w/o holding locks?
   // can we still hold locks because we aren't sleeping during commit?
   
@@ -185,8 +185,8 @@ sync_helper(int dev, void *logheader, void *trans) {
   // if we are trying to commit but there isn't more space in log,
   // we need to sleep on the current transaction so we don't overwrite
   // the on-disk log
-  struct transaction *currtrans = (struct transaction *) trans;
-  struct logheader *snapshotLH = (struct logheader *) logheader;
+  int currTxnIndex = log[dev].transcount % 2; 
+  struct transaction *currtrans = &log[dev].transactions[currTxnIndex];
 
   // switch to new transactions
   acquire(&log[dev].lock);
@@ -194,7 +194,7 @@ sync_helper(int dev, void *logheader, void *trans) {
   release(&log[dev].lock);
   
 
-  commit(dev, &snapshotLH);
+  commit(dev, &log[dev].lh);
 
   if(is_ondisklog_full(dev)) {
     install_trans(dev);
@@ -227,7 +227,7 @@ end_op(int dev)
   int currTxnIndex;
   int isTxnFull;
   struct transaction *currtrans;
-  struct logheader snapshotLH;
+  // struct logheader snapshotLH;
 
   int do_commit = 0;
 
@@ -255,13 +255,13 @@ end_op(int dev)
 
   // TODO: find out if we need a snapshot of the logheader
   // at the time we want to commit, because it is changing under us
-  memmove(&snapshotLH, &log[dev].lh, sizeof(log[dev].lh));
+  // memmove(&snapshotLH, &log[dev].lh, sizeof(log[dev].lh));
 
   release(&currtrans->lock);  
   release(&log[dev].lock);
   
   if(do_commit){
-    sync_helper(dev, &snapshotLH, currtrans);
+    sync_helper(dev);
   }
 }
 
@@ -284,6 +284,7 @@ write_log(int dev, void *logheader)
 static void
 commit(int dev, void *logheader)
 {
+  // printf("calling commit\n");
   struct logheader *lh = (struct logheader *) logheader;
   if(lh->n > 0) {
     write_log(dev, logheader);     // Write modified blocks from cache to log

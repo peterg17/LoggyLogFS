@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "log.h"
 
 uint64
 sys_exit(void)
@@ -99,5 +100,8 @@ sys_uptime(void)
 uint64
 sys_sync(void)
 {
+  printf("running sync\n");
+  // TODO: change this but dev # for disk is 0
+  sync_helper(0);
   return 0;
 }
