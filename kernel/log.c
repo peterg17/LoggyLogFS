@@ -27,7 +27,7 @@ that allows for several types of concurrency:
 
 struct log log[NDISK];
 
-// static void recover_from_log(int);
+static void recover_from_log(int);
 static void commit(int, void *);
 void print_log_header(int);
 
@@ -54,6 +54,7 @@ initlog(int dev, struct superblock *sb)
   log[dev].start = sb->logstart;
   log[dev].size = sb->nlog;
   log[dev].dev = dev;
+  recover_from_log(dev);
 }
 
 // Copy committed blocks from log to their home location
@@ -78,11 +79,18 @@ install_trans(int dev)
 }
 
 // Read the log header from disk into the in-memory log header
-// static void
-// read_head(int dev)
-// {
-//   panic("read head not implemented\n");
-// }
+static void
+read_head(int dev)
+{
+  struct buf *buf = bread(dev, log[dev].start);
+  struct logheader *lh = (struct logheader *) (buf->data);
+  int i;
+  log[dev].lh.n = lh->n;
+  for (i = 0; i < log[dev].lh.n; i++) {
+    log[dev].lh.block[i] = lh->block[i];
+  }
+  brelse(buf);
+}
 
 // Write in-memory log header to disk.
 // This is the true point at which the
@@ -102,11 +110,15 @@ write_head(int dev, void *logheader)
   brelse(buf);
 }
 
-// static void
-// recover_from_log(int dev)
-// {
-//   panic("recover from log not implemented\n");
-// }
+static void
+recover_from_log(int dev)
+{
+  read_head(dev);
+  install_trans(dev); // if committed, copy from log to disk
+  log[dev].lh.n = 0;
+  write_head(dev, &log[dev].lh);
+
+}
 
 // called at the start of each FS system call.
 void
@@ -230,7 +242,6 @@ end_op(int dev)
     if(is_ondisklog_full(dev)) {
       install_trans(dev);
       log[dev].lh.n = 0;
-      write_head(dev, &log[dev].lh);
     }
 
     acquire(&currtrans->lock);
