@@ -162,6 +162,47 @@ is_ondisklog_full(int dev)
 }
 
 
+void
+sync_helper(int dev, void *logheader, void *trans) {
+  // why do we call commit w/o holding locks?
+  // can we still hold locks because we aren't sleeping during commit?
+  
+  // 1. block new syscalls somehow? by sleeping on curr trans
+  // sleep(currtrans, &currtrans->lock);
+
+  // if we are trying to commit but there isn't more space in log,
+  // we need to sleep on the current transaction so we don't overwrite
+  // the on-disk log
+  struct transaction *currtrans = (struct transaction *) trans;
+  struct logheader *snapshotLH = (struct logheader *) logheader;
+
+  // switch to new transactions
+  acquire(&log[dev].lock);
+  log[dev].transcount += 1;
+  release(&log[dev].lock);
+  
+
+  commit(dev, &snapshotLH);
+
+  if(is_ondisklog_full(dev)) {
+    install_trans(dev);
+    log[dev].lh.n = 0;
+    write_head(dev, &log[dev].lh);
+  }
+
+  acquire(&currtrans->lock);
+  // TODO: when we are incrementing the transaction counter, make sure that there are no
+  // outstanding syscalls, because that could lead to a hairy situation
+  currtrans->committing = 0;
+  currtrans->blocksWritten = 0;
+  // we have no wakeup call here because we don't sleep when committing
+  // TODO: possible wakeup call on each transaction lock
+  // because we can't possibly write to a transaction while its committing
+  wakeup(currtrans);
+  release(&currtrans->lock);
+}
+
+
 // called at the end of each FS system call.
 // commits if this was the last outstanding operation.
 void
@@ -208,41 +249,7 @@ end_op(int dev)
   release(&log[dev].lock);
   
   if(do_commit){
-    // why do we call commit w/o holding locks?
-    // can we still hold locks because we aren't sleeping during commit?
-    
-    // 1. block new syscalls somehow? by sleeping on curr trans
-    // sleep(currtrans, &currtrans->lock);
-
-    // if we are trying to commit but there isn't more space in log,
-    // we need to sleep on the current transaction so we don't overwrite
-    // the on-disk log
-
-
-    // switch to new transactions
-    acquire(&log[dev].lock);
-    log[dev].transcount += 1;
-    release(&log[dev].lock);
-    
-
-    commit(dev, &snapshotLH);
-
-    if(is_ondisklog_full(dev)) {
-      install_trans(dev);
-      log[dev].lh.n = 0;
-      write_head(dev, &log[dev].lh);
-    }
-
-    acquire(&currtrans->lock);
-    // TODO: when we are incrementing the transaction counter, make sure that there are no
-    // outstanding syscalls, because that could lead to a hairy situation
-    currtrans->committing = 0;
-    currtrans->blocksWritten = 0;
-    // we have no wakeup call here because we don't sleep when committing
-    // TODO: possible wakeup call on each transaction lock
-    // because we can't possibly write to a transaction while its committing
-    wakeup(currtrans);
-    release(&currtrans->lock);
+    sync_helper(dev, &snapshotLH, currtrans);
   }
 }
 
