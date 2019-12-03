@@ -27,6 +27,15 @@ that allows for several types of concurrency:
 
 struct log log[NDISK];
 
+// in-memory copies of logged blocks
+struct memlog {
+  // struct spinlock lock;
+  struct buf buf[LOGSIZE];
+  struct logheader lh;
+};
+
+struct memlog mlog[NDISK];
+
 static void recover_from_log(int);
 static void commit(int, void *);
 void print_log_header(int);
@@ -55,6 +64,12 @@ initlog(int dev, struct superblock *sb)
   log[dev].size = sb->nlog;
   log[dev].dev = dev;
   recover_from_log(dev);
+
+  // init in-memory log
+  //initlock(&mlog[dev].lock, "mlog");
+  //for(struct buf* b = mlog[dev].buf; b < mlog[dev].buf+NBUF; b++)
+  //  initsleeplock(&b->lock, "buffer");
+
 }
 
 // Copy committed blocks from log to their home location
@@ -68,12 +83,17 @@ install_trans(int dev)
   // at least in our simple scheme where we use one logheader and clobber
   // it each time, rather than a circular array of descriptor ... commit block pairs
   for (tail = 0; tail < log[dev].lh.n; tail++) {
-    struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
+
+    // read from in-memory log block rather than from on disk log
+    // struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
+    //acquire(&mlog[dev].lock);
+    struct buf* lbuf = &mlog[dev].buf[tail];
     struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
     memmove(dbuf->data, lbuf->data, BSIZE);  // move log block to its destination
     bwrite(dbuf);
-    bunpin(dbuf);
-    brelse(lbuf);
+    // should already be unpinned
+    // bunpin(dbuf);
+    // brelse(lbuf);
     brelse(dbuf);
   }
 }
@@ -266,8 +286,13 @@ write_log(int dev, void *logheader)
   for(tail = 0; tail < lh->n; tail++) {
     struct buf *to = bread(dev, log[dev].start+tail+1); // log block
     struct buf *from = bread(dev, lh->block[tail]); // cached block
+    struct buf* mto = &mlog[dev].buf[tail];
+
     memmove(to->data, from->data, BSIZE);
+    memmove(mto->data, from->data, BSIZE);
+
     bwrite(to); // writing the log block
+    bunpin(from);  // unpin during commit
     brelse(from);
     brelse(to);
   }
@@ -280,6 +305,7 @@ commit(int dev, void *logheader)
   if(lh->n > 0) {
     write_log(dev, logheader);     // Write modified blocks from cache to log
     write_head(dev, logheader);    // Write header to disk -- the real commit
+
     // don't install transaction yet, defer it until on-disk log is full enough
   }
 }
@@ -311,7 +337,7 @@ log_write(struct buf *b)
 
   acquire(&log[dev].lock);
   acquire(&currTrans->lock);
-  
+
   for (i = 0; i < log[dev].lh.n; i++) {
     if (log[dev].lh.block[i] == b->blockno)
       break;  // log absorption -- if block has changed already we're just gonna update
