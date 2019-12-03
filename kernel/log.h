@@ -1,5 +1,7 @@
 #define DESCRIPTORMAGIC 0xb32803b
 
+void sync_helper(int);
+
 struct transaction {
   struct spinlock lock;
   int seqNum; //sequence # of transaction (transaction id)
