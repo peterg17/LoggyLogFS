@@ -64,12 +64,6 @@ initlog(int dev, struct superblock *sb)
   log[dev].size = sb->nlog;
   log[dev].dev = dev;
   recover_from_log(dev);
-
-  // init in-memory log
-  //initlock(&mlog[dev].lock, "mlog");
-  //for(struct buf* b = mlog[dev].buf; b < mlog[dev].buf+NBUF; b++)
-  //  initsleeplock(&b->lock, "buffer");
-
 }
 
 // Copy committed blocks from log to their home location
@@ -85,15 +79,13 @@ install_trans(int dev)
   for (tail = 0; tail < log[dev].lh.n; tail++) {
 
     // read from in-memory log block rather than from on disk log
-    // struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
-    //acquire(&mlog[dev].lock);
-    struct buf* lbuf = &mlog[dev].buf[tail];
+    struct buf* mlbuf = &mlog[dev].buf[tail];
+    //struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
     struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
-    memmove(dbuf->data, lbuf->data, BSIZE);  // move log block to its destination
+    memmove(dbuf->data, mlbuf->data, BSIZE);  // move log block to its destination
     bwrite(dbuf);
-    // should already be unpinned
-    // bunpin(dbuf);
-    // brelse(lbuf);
+    bunpin(dbuf);
+    //brelse(lbuf);
     brelse(dbuf);
   }
 }
@@ -300,7 +292,7 @@ write_log(int dev, void *logheader)
     memmove(mto->data, from->data, BSIZE);
 
     bwrite(to); // writing the log block
-    bunpin(from);  // unpin during commit
+    //bunpin(from);  // unpin during commit
     brelse(from);
     brelse(to);
   }
