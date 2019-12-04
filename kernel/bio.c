@@ -100,6 +100,21 @@ bread(uint dev, uint blockno)
   return b;
 }
 
+// Return a locked buf with the contents of the indicated block.
+struct buf*
+bread_log(uint dev, uint blockno)
+{
+  struct buf *b;
+
+  b = bget(dev, blockno);
+  if(!b->valid) {
+    printf("reading from disk\n");
+    virtio_disk_rw(b->dev, b, 0);
+    b->valid = 1;
+  }
+  return b;
+}
+
 // Write b's contents to disk.  Must be locked.
 void
 bwrite(struct buf *b)

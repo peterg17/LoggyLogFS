@@ -8,8 +8,9 @@ int
 main()
 {
   char buf[BSIZE];
-  int fd, i, blocks;
+  int fd, i, blocks, cycles;
 
+  cycles = uptime();
   fd = open("big.file", O_CREATE | O_WRONLY);
   if(fd < 0){
     printf("bigfile: cannot open big.file for writing\n");
@@ -52,7 +53,9 @@ main()
     }
   }
 
+  cycles = uptime() - cycles;
   printf("bigfile done; ok\n"); 
+  printf("took %d cycles\n", cycles);
 
   exit(0);
 }

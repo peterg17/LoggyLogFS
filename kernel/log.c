@@ -68,7 +68,7 @@ install_trans(int dev)
   // at least in our simple scheme where we use one logheader and clobber
   // it each time, rather than a circular array of descriptor ... commit block pairs
   for (tail = 0; tail < log[dev].lh.n; tail++) {
-    struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
+    struct buf *lbuf = bread_log(dev, log[dev].start+tail+1); // log block
     struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
     memmove(dbuf->data, lbuf->data, BSIZE);  // move log block to its destination
     bwrite(dbuf);
