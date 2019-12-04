@@ -16,8 +16,8 @@ void create_small_files(int n)
 
     int fileNameLength;
     int recycledI;
-    fileNameLength = (i / 26) + 1; // cycle through the alphabet, each time increase file length by 1
-    recycledI = i % 26;
+    fileNameLength = (i / 40) + 1; // cycle through ascii, each time increase file length by 1
+    recycledI = i % 40;
 
     char fname[fileNameLength];
     for (int j = 0; j < fileNameLength; j++) {
@@ -33,10 +33,10 @@ void create_small_files(int n)
     write(fd, "aaa", 3);
     close(fd);
 
-    if(unlink(fname) < 0){
-      printf("unlink failed small file:  %s\n", fname);
-      exit(1);
-    }
+    // if(unlink(fname) < 0){
+    //   printf("unlink failed small file:  %s\n", fname);
+    //   exit(1);
+    // }
   }
 
   cycles = uptime() - cycles;

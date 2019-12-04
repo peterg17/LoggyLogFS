@@ -309,7 +309,7 @@ write_log(int dev, void *logheader)
 static void
 commit(int dev, void *logheader)
 {
-  // printf("calling commit\n");
+  printf("calling commit\n");
   struct logheader *lh = (struct logheader *) logheader;
   if(lh->n > 0) {
     write_log(dev, logheader);     // Write modified blocks from cache to log
