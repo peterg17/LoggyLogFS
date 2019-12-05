@@ -76,9 +76,9 @@ write_log(int dev, void *logheader)
   for(tail = 0; tail < lh->n; tail++) {
     struct buf *to = bread(dev, log[dev].start+tail+1); // log block
     struct buf *from = bread(dev, lh->block[tail]); // cached block
-    struct buf* mto = &mlog[dev].buf[tail];
+    // struct buf* mto = &mlog[dev].buf[tail];
     memmove(to->data, from->data, BSIZE);
-    memmove(mto->data, from->data, BSIZE);
+    // memmove(mto->data, from->data, BSIZE);
 
     bwrite(to); // writing the log block
     // bunpin(from);  // unpin during commit
@@ -100,13 +100,13 @@ install_trans(int dev)
   for (tail = 0; tail < log[dev].lh.n; tail++) {
 
     // read from in-memory log block rather than from on disk log
-    struct buf* mlbuf = &mlog[dev].buf[tail];
-    //struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
+    // struct buf* mlbuf = &mlog[dev].buf[tail];
+    struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
     struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
-    memmove(dbuf->data, mlbuf->data, BSIZE);  // move log block to its destination
+    memmove(dbuf->data, lbuf->data, BSIZE);  // move log block to its destination
     bwrite(dbuf);
     bunpin(dbuf);
-    //brelse(lbuf);
+    brelse(lbuf);
     brelse(dbuf);
   }
 }
@@ -218,6 +218,7 @@ sync_helper(int dev) {
   // if we are trying to commit but there isn't more space in log,
   // we need to sleep on the current transaction so we don't overwrite
   // the on-disk log
+
   int currTxnIndex = log[dev].transcount % 2; 
   struct transaction *currtrans = &log[dev].transactions[currTxnIndex];
 
@@ -226,7 +227,8 @@ sync_helper(int dev) {
   log[dev].transcount += 1;
   release(&log[dev].lock);
   
-
+  printf("committing, lh.n is: %d\n", log[dev].lh.n);
+  printf("committing, transaction num is: %d\n", currtrans->blocksWritten);
   commit(dev, &log[dev].lh);
 
   if(is_ondisklog_full(dev)) {
