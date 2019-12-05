@@ -66,6 +66,27 @@ initlog(int dev, struct superblock *sb)
   recover_from_log(dev);
 }
 
+
+// Copy modified blocks from cache to log.
+static void
+write_log(int dev, void *logheader)
+{
+  struct logheader *lh = (struct logheader *) logheader;
+  int tail;
+  for(tail = 0; tail < lh->n; tail++) {
+    struct buf *to = bread(dev, log[dev].start+tail+1); // log block
+    struct buf *from = bread(dev, lh->block[tail]); // cached block
+    struct buf* mto = &mlog[dev].buf[tail];
+    memmove(to->data, from->data, BSIZE);
+    memmove(mto->data, from->data, BSIZE);
+
+    bwrite(to); // writing the log block
+    // bunpin(from);  // unpin during commit
+    brelse(from);
+    brelse(to);
+  }
+}
+
 // Copy committed blocks from log to their home location
 static void
 install_trans(int dev)
@@ -255,7 +276,7 @@ end_op(int dev)
   if(currtrans->outstanding < 0) {
     panic("outstanding syscalls in txn is < 0!\n");
   } else if (currtrans->outstanding == 0 && isTxnFull) {
-    printf("starting the commit process\n", currtrans->seqNum);
+    // printf("starting the commit process\n", currtrans->seqNum);
     // probably should do some other stuff like checking size of log and start commit
     // if txn is full, commit and stuff 
     do_commit = 1;
@@ -277,31 +298,10 @@ end_op(int dev)
   }
 }
 
-// Copy modified blocks from cache to log.
-static void
-write_log(int dev, void *logheader)
-{
-  struct logheader *lh = (struct logheader *) logheader;
-  int tail;
-  for(tail = 0; tail < lh->n; tail++) {
-    struct buf *to = bread(dev, log[dev].start+tail+1); // log block
-    struct buf *from = bread(dev, lh->block[tail]); // cached block
-    struct buf* mto = &mlog[dev].buf[tail];
-
-    memmove(to->data, from->data, BSIZE);
-    memmove(mto->data, from->data, BSIZE);
-
-    bwrite(to); // writing the log block
-    //bunpin(from);  // unpin during commit
-    brelse(from);
-    brelse(to);
-  }
-}
-
 static void
 commit(int dev, void *logheader)
 {
-  printf("calling commit\n");
+  // printf("calling commit\n");
   struct logheader *lh = (struct logheader *) logheader;
   if(lh->n > 0) {
     write_log(dev, logheader);     // Write modified blocks from cache to log
