@@ -11,7 +11,7 @@
 #define MAXSYSCALL   5   // max syscalls per transaction (before triggering commit)
 #define TRANSSIZE    50 // 5 syscalls and leave room for 2 blocks for desc/commit blocks
 #define LOGSIZE      100  // max data blocks in on-disk log
-#define NBUF         200  // size of disk block cache
-#define FSSIZE       2000  // size of file system in blocks
+#define NBUF         300  // size of disk block cache
+#define FSSIZE       200000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
 #define NDISK        2
