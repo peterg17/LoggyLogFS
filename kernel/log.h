@@ -25,17 +25,6 @@ struct logheader {
   int block[LOGSIZE];
 };
 
-//struct descriptorBlock {
-//  uint magic;
-//  int seqNum;
-//  int block[TRANSSIZE];
-//};
-
-//struct commitBlock {
-//  uint magic;
-//  int seqNum;
-//};
-
 // currently we just have 2 transactions, find the current one 
 // by doing modulo 2 on transcount, we just keep incrementing the 
 // transcount
@@ -46,7 +35,6 @@ struct log {
   int dev;
   struct transaction transactions[NTRANS];
   int transcount;
-  int currSeqNum;
   struct logheader lh;
 };
 
