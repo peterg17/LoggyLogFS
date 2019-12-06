@@ -182,7 +182,6 @@ static void
 recover_from_log(int dev)
 {
   read_head(dev);
-//  install_trans(dev); // if committed, copy from log to disk
 
   int tail;
 
@@ -275,9 +274,7 @@ sync_helper(int dev) {
   acquire(&log[dev].lock);
   log[dev].transcount += 1;
   release(&log[dev].lock);
-  
-  // printf("committing, lh.n is: %d\n", log[dev].lh.n);
-  // printf("committing, transaction num is: %d\n", currtrans->blocksWritten);
+
   commit(dev, &log[dev].lh, currtrans->blocksWritten);
 
   if(is_ondisklog_full(dev)) {
