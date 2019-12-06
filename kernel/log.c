@@ -346,7 +346,9 @@ log_write(struct buf *b)
   acquire(&log[dev].lock);
   acquire(&currTrans->lock);
 
-  for (i = 0; i < log[dev].lh.n; i++) {
+  // only check for blocks in the current transaction
+  // or else we will lose writes to a block earlier in the log
+  for (i = (log[dev].lh.n - currTrans->blocksWritten); i < log[dev].lh.n; i++) {
     if (log[dev].lh.block[i] == b->blockno)
       break;  // log absorption -- if block has changed already we're just gonna update
   }
