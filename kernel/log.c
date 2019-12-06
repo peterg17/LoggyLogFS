@@ -26,13 +26,13 @@ that allows for several types of concurrency:
 
 
 struct log log[NDISK];
-int logTicks;
+int logTicks[NDISK];
+#define MAXTICKS 50
 
 #ifdef MLOG
 // in-memory copies of logged blocks
 struct memlog {
   struct buf buf[LOGSIZE];
-//  struct logheader lh;
 };
 
 struct memlog mlog[NDISK];
@@ -43,9 +43,13 @@ static void commit(int, void *, int);
 void print_log_header(int);
 
 void
-incLogTicks() 
+incLogTicks(int dev) 
 {
-  logTicks++;
+  logTicks[dev]++;
+  if (logTicks[dev] == MAXTICKS) {
+    logTicks[dev] = 0;
+    sync_helper(dev);
+  }
 }
 
 // TODO: can we write something in c that will take in a printf string
@@ -59,6 +63,8 @@ initlog(int dev, struct superblock *sb)
   // idea: have a child process here that never returns it just
   // keeps spinning and checking for installing the transaction
   printf("initializing log...\n");
+
+  logTicks[dev] = 0;
 
 #ifdef MLOG
 printf("using in memory log.\n");
@@ -77,18 +83,8 @@ printf("no in memory log.\n");
   log[dev].start = sb->logstart;
   log[dev].size = sb->nlog;
   log[dev].dev = dev;
-  logTicks = 0;
+  logTicks[dev] = 0;
   recover_from_log(dev);
-  if(fork() == 0) {
-    // create new child process that continually checks timer
-    while(1) {
-      printf("s");
-      if (logTicks % SYNCINTERVAL == 0) {
-        printf("[init log child] calling sync helepr!\n");
-        sync_helper(dev);
-      }
-    }
-  }
 }
 
 

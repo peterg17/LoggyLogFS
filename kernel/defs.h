@@ -70,7 +70,7 @@ void            log_write(struct buf*);
 void            begin_op(int);
 void            end_op(int);
 void            crash_op(int,int);
-void            incLogTicks(void);
+void            incLogTicks(int);
 
 // pipe.c
 int             pipealloc(struct file**, struct file**);
