@@ -37,7 +37,7 @@ struct memlog {
 struct memlog mlog[NDISK];
 
 static void recover_from_log(int);
-static void commit(int, void *);
+static void commit(int, void *, int);
 void print_log_header(int);
 
 // TODO: can we write something in c that will take in a printf string
@@ -69,11 +69,16 @@ initlog(int dev, struct superblock *sb)
 
 // Copy modified blocks from cache to log.
 static void
-write_log(int dev, void *logheader)
+write_log(int dev, void *logheader, int blocksWritten)
 {
   struct logheader *lh = (struct logheader *) logheader;
   int tail;
-  for(tail = 0; tail < lh->n; tail++) {
+  // we've already changed to value of lh.n to where it would be after
+  // we commit all of the blocks in the current transaction
+  // e.g. it will show that lh.n: 41 right before we commit
+  //      so we need to subtract by the number of blocks in the transaction and 
+  //      write to just the interval ((lh.n - transblocks)+1,  lh.n)
+  for(tail = (lh->n - blocksWritten); tail < lh->n; tail++) {
     struct buf *to = bread(dev, log[dev].start+tail+1); // log block
     struct buf *from = bread(dev, lh->block[tail]); // cached block
     // struct buf* mto = &mlog[dev].buf[tail];
@@ -227,9 +232,9 @@ sync_helper(int dev) {
   log[dev].transcount += 1;
   release(&log[dev].lock);
   
-  printf("committing, lh.n is: %d\n", log[dev].lh.n);
-  printf("committing, transaction num is: %d\n", currtrans->blocksWritten);
-  commit(dev, &log[dev].lh);
+  // printf("committing, lh.n is: %d\n", log[dev].lh.n);
+  // printf("committing, transaction num is: %d\n", currtrans->blocksWritten);
+  commit(dev, &log[dev].lh, currtrans->blocksWritten);
 
   if(is_ondisklog_full(dev)) {
     install_trans(dev);
@@ -301,12 +306,12 @@ end_op(int dev)
 }
 
 static void
-commit(int dev, void *logheader)
+commit(int dev, void *logheader, int blocksWritten)
 {
   // printf("calling commit\n");
   struct logheader *lh = (struct logheader *) logheader;
   if(lh->n > 0) {
-    write_log(dev, logheader);     // Write modified blocks from cache to log
+    write_log(dev, logheader, blocksWritten);     // Write modified blocks from cache to log
     write_head(dev, logheader);    // Write header to disk -- the real commit
 
     // don't install transaction yet, defer it until on-disk log is full enough
