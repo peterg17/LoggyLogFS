@@ -29,15 +29,13 @@ struct log log[NDISK];
 
 // in-memory copies of logged blocks
 struct memlog {
-  // struct spinlock lock;
   struct buf buf[LOGSIZE];
-  struct logheader lh;
+//  struct logheader lh;
 };
-
 struct memlog mlog[NDISK];
 
 static void recover_from_log(int);
-static void commit(int, void *, int);
+static void commit(int, void *);
 void print_log_header(int);
 
 // TODO: can we write something in c that will take in a printf string
@@ -67,28 +65,36 @@ initlog(int dev, struct superblock *sb)
 }
 
 
+
+
+
+
 // Copy modified blocks from cache to log.
 static void
-write_log(int dev, void *logheader, int blocksWritten)
+write_log(int dev, void *logheader)
 {
   struct logheader *lh = (struct logheader *) logheader;
   int tail;
-  // we've already changed to value of lh.n to where it would be after
-  // we commit all of the blocks in the current transaction
-  // e.g. it will show that lh.n: 41 right before we commit
-  //      so we need to subtract by the number of blocks in the transaction and 
-  //      write to just the interval ((lh.n - transblocks)+1,  lh.n)
-  for(tail = (lh->n - blocksWritten); tail < lh->n; tail++) {
-    struct buf *to = bread(dev, log[dev].start+tail+1); // log block
-    struct buf *from = bread(dev, lh->block[tail]); // cached block
-    struct buf* mto = &mlog[dev].buf[tail];
-    memmove(to->data, from->data, BSIZE);
-    memmove(mto->data, from->data, BSIZE);
+  for(tail = 0; tail < lh->n; tail++) {
 
-    bwrite(to); // writing the log block
-    bunpin(from);  // unpin during commit
+    struct buf *from = bread(dev, lh->block[tail]); // cached block
+
+    if (from->refcnt > 1) {
+
+      struct buf *to = bread(dev, log[dev].start+tail+1); // log block
+      memmove(to->data, from->data, BSIZE);
+
+      struct buf* mto = &mlog[dev].buf[tail];
+      memmove(mto->data, from->data, BSIZE);
+
+      bwrite(to); // writing the log block
+//    if (from->refcnt > 1)
+      bunpin(from);  // unpin during commit
+      brelse(to);
+    }
+
     brelse(from);
-    brelse(to);
+
   }
 }
 
@@ -106,9 +112,12 @@ install_trans(int dev)
 
     // read from in-memory log block rather than from on disk log
     struct buf* mlbuf = &mlog[dev].buf[tail];
+    //struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
     struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
     memmove(dbuf->data, mlbuf->data, BSIZE);  // move log block to its destination
     bwrite(dbuf);
+    //bunpin(dbuf);
+    //brelse(lbuf);
     brelse(dbuf);
   }
 }
@@ -149,21 +158,7 @@ static void
 recover_from_log(int dev)
 {
   read_head(dev);
-//  install_trans(dev); // if committed, copy from log to disk
-
-  int tail;
-
-  for (tail = 0; tail < log[dev].lh.n; tail++) {
-
-    // copy from on disk log
-    struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
-    struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
-    memmove(dbuf->data, lbuf->data, BSIZE);  // move log block to its destination
-    bwrite(dbuf);
-    brelse(lbuf);
-    brelse(dbuf);
-  }
-
+  install_trans(dev); // if committed, copy from log to disk
   log[dev].lh.n = 0;
   write_head(dev, &log[dev].lh);
 
@@ -234,7 +229,6 @@ sync_helper(int dev) {
   // if we are trying to commit but there isn't more space in log,
   // we need to sleep on the current transaction so we don't overwrite
   // the on-disk log
-
   int currTxnIndex = log[dev].transcount % 2; 
   struct transaction *currtrans = &log[dev].transactions[currTxnIndex];
 
@@ -243,9 +237,8 @@ sync_helper(int dev) {
   log[dev].transcount += 1;
   release(&log[dev].lock);
   
-  // printf("committing, lh.n is: %d\n", log[dev].lh.n);
-  // printf("committing, transaction num is: %d\n", currtrans->blocksWritten);
-  commit(dev, &log[dev].lh, currtrans->blocksWritten);
+
+  commit(dev, &log[dev].lh);
 
   if(is_ondisklog_full(dev)) {
     install_trans(dev);
@@ -317,12 +310,12 @@ end_op(int dev)
 }
 
 static void
-commit(int dev, void *logheader, int blocksWritten)
+commit(int dev, void *logheader)
 {
   // printf("calling commit\n");
   struct logheader *lh = (struct logheader *) logheader;
   if(lh->n > 0) {
-    write_log(dev, logheader, blocksWritten);     // Write modified blocks from cache to log
+    write_log(dev, logheader);     // Write modified blocks from cache to log
     write_head(dev, logheader);    // Write header to disk -- the real commit
 
     // don't install transaction yet, defer it until on-disk log is full enough
@@ -357,9 +350,7 @@ log_write(struct buf *b)
   acquire(&log[dev].lock);
   acquire(&currTrans->lock);
 
-  // only check for blocks in the current transaction
-  // or else we will lose writes to a block earlier in the log
-  for (i = (log[dev].lh.n - currTrans->blocksWritten); i < log[dev].lh.n; i++) {
+  for (i = 0; i < log[dev].lh.n; i++) {
     if (log[dev].lh.block[i] == b->blockno)
       break;  // log absorption -- if block has changed already we're just gonna update
   }
