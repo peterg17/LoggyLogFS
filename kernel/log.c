@@ -27,14 +27,15 @@ that allows for several types of concurrency:
 
 struct log log[NDISK];
 
+#ifdef MLOG
 // in-memory copies of logged blocks
 struct memlog {
-  // struct spinlock lock;
   struct buf buf[LOGSIZE];
-  struct logheader lh;
+//  struct logheader lh;
 };
 
 struct memlog mlog[NDISK];
+#endif
 
 static void recover_from_log(int);
 static void commit(int, void *, int);
@@ -51,6 +52,12 @@ initlog(int dev, struct superblock *sb)
   // idea: have a child process here that never returns it just
   // keeps spinning and checking for installing the transaction
   printf("initializing log...\n");
+
+#ifdef MLOG
+printf("using in memory log.\n");
+#else
+printf("no in memory log.\n");
+#endif
 
   // this is relevant in case we make the single header block too big
   if (sizeof(struct logheader) >= BSIZE)
@@ -81,12 +88,14 @@ write_log(int dev, void *logheader, int blocksWritten)
   for(tail = (lh->n - blocksWritten); tail < lh->n; tail++) {
     struct buf *to = bread(dev, log[dev].start+tail+1); // log block
     struct buf *from = bread(dev, lh->block[tail]); // cached block
-    struct buf* mto = &mlog[dev].buf[tail];
     memmove(to->data, from->data, BSIZE);
+
+#ifdef MLOG
+    struct buf* mto = &mlog[dev].buf[tail];
     memmove(mto->data, from->data, BSIZE);
+#endif
 
     bwrite(to); // writing the log block
-    bunpin(from);  // unpin during commit
     brelse(from);
     brelse(to);
   }
@@ -105,10 +114,20 @@ install_trans(int dev)
   for (tail = 0; tail < log[dev].lh.n; tail++) {
 
     // read from in-memory log block rather than from on disk log
+
+#ifdef MLOG
     struct buf* mlbuf = &mlog[dev].buf[tail];
     struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
     memmove(dbuf->data, mlbuf->data, BSIZE);  // move log block to its destination
+#else
+    struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
+    struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
+    memmove(dbuf->data, lbuf->data, BSIZE);  // move log block to its destination
+    brelse(lbuf);
+#endif
+
     bwrite(dbuf);
+    bunpin(dbuf);
     brelse(dbuf);
   }
 }
