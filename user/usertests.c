@@ -2124,8 +2124,6 @@ main(int argc, char *argv[])
     void (*f)(char *);
     char *s;
   } tests[] = {
-    {writebig, "writebig"},
-/*
     {reparent2, "reparent2"},
     {pgbug, "pgbug" },
     {sbrkbugs, "sbrkbugs" },
@@ -2174,7 +2172,6 @@ main(int argc, char *argv[])
     {forktest, "forktest"},
     {bigdir, "bigdir"}, // slow
     { 0, 0},
-*/
   };
 
   printf("usertests starting\n");
