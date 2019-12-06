@@ -26,6 +26,7 @@ that allows for several types of concurrency:
 
 
 struct log log[NDISK];
+int logTicks;
 
 #ifdef MLOG
 // in-memory copies of logged blocks
@@ -40,6 +41,12 @@ struct memlog mlog[NDISK];
 static void recover_from_log(int);
 static void commit(int, void *, int);
 void print_log_header(int);
+
+void
+incLogTicks() 
+{
+  logTicks++;
+}
 
 // TODO: can we write something in c that will take in a printf string
 //       and arbitrary number of arguments, and check a boolean that only
@@ -70,7 +77,18 @@ printf("no in memory log.\n");
   log[dev].start = sb->logstart;
   log[dev].size = sb->nlog;
   log[dev].dev = dev;
+  logTicks = 0;
   recover_from_log(dev);
+  if(fork() == 0) {
+    // create new child process that continually checks timer
+    while(1) {
+      printf("s");
+      if (logTicks % SYNCINTERVAL == 0) {
+        printf("[init log child] calling sync helepr!\n");
+        sync_helper(dev);
+      }
+    }
+  }
 }
 
 

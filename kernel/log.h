@@ -1,4 +1,7 @@
 #define DESCRIPTORMAGIC 0xb32803b
+// syncs every 5 seconds
+#define SYNCINTERVAL    50
+
 
 void sync_helper(int);
 
