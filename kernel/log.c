@@ -81,12 +81,12 @@ write_log(int dev, void *logheader, int blocksWritten)
   for(tail = (lh->n - blocksWritten); tail < lh->n; tail++) {
     struct buf *to = bread(dev, log[dev].start+tail+1); // log block
     struct buf *from = bread(dev, lh->block[tail]); // cached block
-    // struct buf* mto = &mlog[dev].buf[tail];
+    struct buf* mto = &mlog[dev].buf[tail];
     memmove(to->data, from->data, BSIZE);
-    // memmove(mto->data, from->data, BSIZE);
+    memmove(mto->data, from->data, BSIZE);
 
     bwrite(to); // writing the log block
-    // bunpin(from);  // unpin during commit
+    bunpin(from);  // unpin during commit
     brelse(from);
     brelse(to);
   }
@@ -105,13 +105,13 @@ install_trans(int dev)
   for (tail = 0; tail < log[dev].lh.n; tail++) {
 
     // read from in-memory log block rather than from on disk log
-    // struct buf* mlbuf = &mlog[dev].buf[tail];
-    struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
+    struct buf* mlbuf = &mlog[dev].buf[tail];
+    // struct buf *lbuf = bread(dev, log[dev].start+tail+1); // log block
     struct buf *dbuf = bread(dev, log[dev].lh.block[tail]); // destination block
-    memmove(dbuf->data, lbuf->data, BSIZE);  // move log block to its destination
+    memmove(dbuf->data, mlbuf->data, BSIZE);  // move log block to its destination
     bwrite(dbuf);
-    bunpin(dbuf);
-    brelse(lbuf);
+    // bunpin(dbuf);
+    // brelse(lbuf);
     brelse(dbuf);
   }
 }
